@@ -39,11 +39,9 @@ In test dataset there were ~35 images in total.
 |-----------|--------------|------------------|
 | Sum PSNR  | 1103.4       | 1108.1           |   
 | Mean PSNR | 29.82        | 29.95            |  
-|           |              |                  |   
 
-And also in the silde with results.
-Unfortunately, even though average PSNR have risen, difference is practically impossible to spot with the human eye,
-which is might be seen from `comparision.pdf`
+Unfortunately, even though average PSNR has risen, difference is practically impossible to spot with the human eye.
+Illustrated in `comparision.pdf`
 
 #### Accurate Image Super-Resolution Using Very Deep Convolutional Networks
 
