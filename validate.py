@@ -42,7 +42,7 @@ def main() -> None:
     # Start the verification mode of the model.
     model.eval()
     # Turn on half-precision inference.
-    model.half()
+    # model.half()
 
     # Initialize the image evaluation index.
     total_psnr = 0.0
@@ -77,18 +77,20 @@ def main() -> None:
         hr_y_image, hr_cb_image, hr_cr_image = cv2.split(hr_ycbcr_image)
 
         # Convert Y image data convert to Y tensor data
-        lr_y_tensor = imgproc.image2tensor(lr_y_image, range_norm=False, half=True).to(config.device).unsqueeze_(0)
-        hr_y_tensor = imgproc.image2tensor(hr_y_image, range_norm=False, half=True).to(config.device).unsqueeze_(0)
+        lr_y_tensor = imgproc.image2tensor(lr_y_image, range_norm=False, half=False).to(config.device).unsqueeze_(0)
+        hr_y_tensor = imgproc.image2tensor(hr_y_image, range_norm=False, half=False).to(config.device).unsqueeze_(0)
 
         # Only reconstruct the Y channel image data.
         with torch.no_grad():
             sr_y_tensor = model(lr_y_tensor).clamp_(0, 1.0)
 
+        print(sr_y_tensor.size(), hr_y_tensor.size(), lr_y_tensor.size())
+
         # Cal PSNR
         total_psnr += 10. * torch.log10(1. / torch.mean((sr_y_tensor - hr_y_tensor) ** 2))
 
         # Save image
-        sr_y_image = imgproc.tensor2image(sr_y_tensor, range_norm=False, half=True)
+        sr_y_image = imgproc.tensor2image(sr_y_tensor, range_norm=False, half=False)
         sr_y_image = sr_y_image.astype(np.float32) / 255.0
         sr_ycbcr_image = cv2.merge([sr_y_image, hr_cb_image, hr_cr_image])
         sr_image = imgproc.ycbcr2bgr(sr_ycbcr_image)

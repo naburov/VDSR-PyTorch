@@ -23,13 +23,13 @@ random.seed(0)
 torch.manual_seed(0)
 np.random.seed(0)
 # Use GPU for training by default
-device = torch.device("cuda", 0)
+device = torch.device("mps")
 # Turning on when the image size does not change during training can speed up training
 cudnn.benchmark = True
 # Image magnification factor
 upscale_factor = 2
 # Current configuration parameter method
-mode = "train"
+mode = "valid"
 # Experiment name, easy to save weights and log files
 exp_name = "vdsr_baseline"
 
@@ -68,6 +68,6 @@ if mode == "train":
 if mode == "valid":
     # Test data address
     sr_dir = f"results/test/{exp_name}"
-    hr_dir = f"data/Set5/GTmod12"
+    hr_dir = f"/Users/burovnikita/PycharmProjects/SREnhancement/VDSR-PyTorch/data/DIV2K_train_HR"
 
-    model_path = f"results/{exp_name}/best.pth.tar"
+    model_path = f"/Users/burovnikita/PycharmProjects/SREnhancement/VDSR-PyTorch/model/vdsr-TB291-fef487db.pth.tar"
