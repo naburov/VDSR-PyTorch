@@ -27,7 +27,7 @@ device = torch.device("mps")
 # Turning on when the image size does not change during training can speed up training
 cudnn.benchmark = True
 # Image magnification factor
-upscale_factor = 2
+upscale_factor = 4
 # Current configuration parameter method
 mode = "valid"
 # Experiment name, easy to save weights and log files
@@ -66,8 +66,14 @@ if mode == "train":
     print_frequency = 200
 
 if mode == "valid":
-    # Test data address
-    sr_dir = f"results/test/{exp_name}"
+    # number of images in the dir to process
+    n_images = 50
+
+    # save processed image to
+    sr_dir = f"/Users/burovnikita/PycharmProjects/SREnhancement/VDSR-PyTorch/data/Results"
+
+    # read hr images from
     hr_dir = f"/Users/burovnikita/PycharmProjects/SREnhancement/VDSR-PyTorch/data/DIV2K_train_HR"
 
+    # path to model weights
     model_path = f"/Users/burovnikita/PycharmProjects/SREnhancement/VDSR-PyTorch/model/vdsr-TB291-fef487db.pth.tar"

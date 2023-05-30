@@ -1,15 +1,13 @@
 import os
 
 import cv2
+import glob
 import numpy as np
 import torch
-from natsort import natsorted
 
 import config
 import imgproc
 from model import VDSR
-from plotting_utils import plot_minmax_normalized, plot_image
-import torch.nn.functional as nnf
 
 
 def load_high_res_image(hr_image_path):
@@ -30,8 +28,13 @@ def psnr(true_hr_image, pred_hr_image):
     return 10. * torch.log10(1. / torch.mean((true_hr_image - pred_hr_image) ** 2))
 
 
-def enhance_image(lr_image_tensor: torch.Tensor, hr_image_tensor: torch.Tensor, model, alpha):
-    return alpha * calc_step_image(lr_image_tensor, hr_image_tensor, model)
+def save_sr_image(hr_cb_image, hr_cr_image, sr_y_tensor, path):
+    sr_y_tensor = sr_y_tensor.cpu().detach()
+    sr_y_image = imgproc.tensor2image(sr_y_tensor, range_norm=False, half=False)
+    sr_y_image = sr_y_image.astype(np.float32) / 255.0
+    sr_ycbcr_image = cv2.merge([sr_y_image, hr_cb_image, hr_cr_image])
+    sr_image = imgproc.ycbcr2bgr(sr_ycbcr_image)
+    cv2.imwrite(path, sr_image * 255.0)
 
 
 def calc_step_image(lr_image_tensor: torch.Tensor, hr_image_tensor: torch.Tensor, model):
@@ -42,14 +45,10 @@ def calc_step_image(lr_image_tensor: torch.Tensor, hr_image_tensor: torch.Tensor
     loss.backward()
     # get max along channel axis
     step = lr_image_tensor.grad[0]
-    print(step.size())
+    # print(step.size())
 
     # return grads
-    return step, loss
-
-
-lr_image_path = r'/Users/burovnikita/PycharmProjects/SREnhancement/VDSR-PyTorch/data/DIV2K_train_LR_wild/0001x4w1.png'
-hr_image_path = r'/Users/burovnikita/PycharmProjects/SREnhancement/VDSR-PyTorch/data/DIV2K_train_HR/0001.png'
+    return step, loss, sr_image
 
 
 def main() -> None:
@@ -63,42 +62,50 @@ def main() -> None:
 
     model.eval()
 
-    hr_image = load_high_res_image(hr_image_path)
+    hr_image_filenames = glob.glob(os.path.join(config.hr_dir, '*g'))
+    for hr_image_path in hr_image_filenames[:config.n_images]:
+        print('Processing {0}'.format(hr_image_path))
+        try:
+            hr_image = load_high_res_image(hr_image_path)
 
-    # Make low-resolution image
-    lr_image = imgproc.imresize(hr_image, 1 / config.upscale_factor)
-    h, w = lr_image.shape[:2]
-    lr_image = imgproc.imresize(lr_image, config.upscale_factor)
+            # Make low-resolution image
+            lr_image = imgproc.imresize(hr_image, 1 / config.upscale_factor)
+            lr_image = imgproc.imresize(lr_image, config.upscale_factor)
 
-    # Convert BGR image to YCbCr image
-    lr_ycbcr_image = imgproc.bgr2ycbcr(lr_image, use_y_channel=False)
-    hr_ycbcr_image = imgproc.bgr2ycbcr(hr_image, use_y_channel=False)
+            # Convert BGR image to YCbCr image
+            lr_ycbcr_image = imgproc.bgr2ycbcr(lr_image, use_y_channel=False)
+            hr_ycbcr_image = imgproc.bgr2ycbcr(hr_image, use_y_channel=False)
 
-    # Split YCbCr image data
-    lr_y_image, lr_cb_image, lr_cr_image = cv2.split(lr_ycbcr_image)
-    hr_y_image, hr_cb_image, hr_cr_image = cv2.split(hr_ycbcr_image)
+            # Split YCbCr image data
+            lr_y_image, lr_cb_image, lr_cr_image = cv2.split(lr_ycbcr_image)
+            hr_y_image, hr_cb_image, hr_cr_image = cv2.split(hr_ycbcr_image)
 
-    # Convert Y image data convert to Y tensor data
-    lr_y_tensor = imgproc.image2tensor(lr_y_image, range_norm=False, half=False).to(config.device).unsqueeze_(0)
-    hr_y_tensor = imgproc.image2tensor(hr_y_image, range_norm=False, half=False).to(config.device).unsqueeze_(0)
-    print(lr_y_tensor.shape, hr_y_tensor.shape)
-    s, loss = calc_step_image(lr_y_tensor, hr_y_tensor, model)
-    print(loss)
+            # Convert Y image data convert to Y tensor data
+            lr_y_tensor = imgproc.image2tensor(lr_y_image, range_norm=False, half=False).to(config.device).unsqueeze_(0)
+            hr_y_tensor = imgproc.image2tensor(hr_y_image, range_norm=False, half=False).to(config.device).unsqueeze_(0)
 
-    s = s.cpu().detach().unsqueeze_(0)
-    change = nnf.interpolate(s, size=(h, w), mode='bicubic', align_corners=False)
-    print(change.size())
-    lr_image = imgproc.imresize(hr_image, 1 / config.upscale_factor)
-    lr_ycbcr_image = imgproc.bgr2ycbcr(lr_image, use_y_channel=False)
-    lr_y_image, lr_cb_image, lr_cr_image = cv2.split(lr_ycbcr_image)
-    lr_y_image = lr_y_image + change
-    lr_y_tensor = imgproc.image2tensor(lr_y_image, range_norm=False, half=False).to(config.device).unsqueeze_(0)
+            s, loss, sr_y_tensor = calc_step_image(lr_y_tensor, hr_y_tensor, model)
+            loss = loss.cpu().detach().numpy()
+            print('Vanilla loss: ', -loss)
+            save_name = os.path.join(
+                config.sr_dir,
+                'vanilla_psnr_{0}'.format(-loss) + '_' + hr_image_path.split(os.sep)[-1]
+            )
+            save_sr_image(hr_cb_image, hr_cr_image, sr_y_tensor, save_name)
+            with torch.no_grad():
+                sr_y_tensor = model(lr_y_tensor - 0.5 * s).clamp_(0, 1.0)
 
-    # plot_minmax_normalized(s.cpu())
-    sr_image = model(lr_y_tensor).clamp_(0, 1.0)
-    loss = psnr(hr_y_tensor, sr_image)
-    print(loss)
-    plot_image(sr_image.cpu().detach())
+            loss = psnr(hr_y_tensor, sr_y_tensor)
+            loss = loss.cpu().detach().numpy()
+            save_name = os.path.join(
+                config.sr_dir,
+                'enhanced_psnr_{0}'.format(loss) + '_' + hr_image_path.split(os.sep)[-1]
+            )
+            save_sr_image(hr_cb_image, hr_cr_image, sr_y_tensor, save_name)
+            print('Enhanced loss: ', loss)
+        except Exception as e:
+            # as I run this on mac I have some memory issues
+            print(e)
 
 
 if __name__ == '__main__':
