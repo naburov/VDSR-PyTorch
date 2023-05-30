@@ -15,7 +15,7 @@ The algorithm is the following:
 
 1) Freeze SR model;
 2) Run SRNet on the low-resolution image and get SR image;
-3) Compute PSNR between SR image and ground true HR image. Compute gradients of negative PSNR in with respect to the
+3) Compute PSNR between SR image and ground true HR image. Compute gradients of negative PSNR with respect to the
    input image.
 4) Update input LR image via gradient descent.
 5) Run SR again (optional).
